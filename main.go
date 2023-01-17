@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	//"github.com/filipkroca/teltonikaparser"
 )
 
 const (
@@ -33,56 +33,64 @@ func main() {
 }
 
 func handleIncomingRequest(conn net.Conn) {
-	// store incoming data
-	buffer := make([]byte, 1024)
-	x, err := conn.Read(buffer)
+	fmt.Println("###################################################################################################")
+
+	imeiBuf := make([]byte, 17)
+	_, err := conn.Read(imeiBuf)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("read x bytes, %d\n", x)
-
-	// respond
-	// time := time.Now().Format("Monday, 02-Jan-06 15:04:05 MST")
-	// conn.Write([]byte("Hi back!\n"))
-
-	fmt.Printf("recived: %x\n", buffer)
-	fmt.Printf("recived as string: %s\n", buffer)
-
-	n, err := conn.Write([]byte{0x1})
+	imei, err := NewIMEIPacket(imeiBuf)
 	if err != nil {
-		fmt.Println("error: %s", err)
-	} else {
-		fmt.Printf("no error, written %d\n", n)
+		fmt.Println(err)
+		fmt.Println("failed to read into IMEIPacket, closing conn")
+		_, err = conn.Write([]byte{0x0})
+		conn.Close()
+		return
+	}
+	if !imei.IsValidIMEIPacket() {
+		fmt.Println("invalid IMEI closing connection")
+		_, err = conn.Write([]byte{0x0})
+		conn.Close()
+		return
 	}
 
-	b2 := make([]byte, 512)
-	x, err2 := conn.Read(b2)
-	if err2 != nil {
-		log.Fatal(err2)
+	_, err = conn.Write([]byte{0x1})
+	if err != nil {
+		fmt.Printf("error accepting IMEI: %s\n", err)
+		conn.Close()
+		return
 	}
 
-	fmt.Printf("recived 2nd pass: %x\n", b2)
+	for {
 
-	ph := b2[0:4]
-	fmt.Printf("ph : %x\n", ph)
+		AVLBuff := make([]byte, 2048)
+		_, err2 := conn.Read(AVLBuff)
+		if err2 != nil {
+			fmt.Printf("error reading into AVLBuff: %s\n", err2)
+			log.Fatal(err2)
+		}
 
-	dfl := b2[4:8]
-	fmt.Printf("dfl : %x\n", dfl)
+		adp := NewAVLDataPacket(AVLBuff)
 
-	codec := b2[8]
-	fmt.Printf("codec : %x\n", codec)
+		replyNumberOfData1 := make([]byte, 4)
+		binary.BigEndian.PutUint32(replyNumberOfData1, uint32(adp.NumberOfData1))
+		fmt.Println(replyNumberOfData1)
 
-	no_r := b2[9]
-	fmt.Printf("number of records  : %x\n", no_r)
+		_, err = conn.Write(replyNumberOfData1)
+		if err != nil {
+			fmt.Printf("error sending ADP NumberOfData1: %s\n", err)
+			conn.Close()
+			return
+		}
 
-	//fmt.Printf("recived 2nd pass as string: %s\n", b2)
+		// dumpUniqueIOIDs(*adp)
+		fmt.Printf("AVL DATA PACKET\n %+v\n", adp)
+	}
 
-	//parsedData, err := teltonikaparser.Decode(&buffer)
-	//  if err != nil {
-	//              log.Panicf("Error when decoding a bs, %v\n", err)
-	//                  }
-	//                      fmt.Printf("%+v", parsedData)
+	// fmt.Printf("AVL DATA PACKET\n %+v\n", adp)
 
-	// close conn
-	conn.Close()
+	// dumpUniqueIOIDs(*adp)
+
+	// conn.Close()
 }
