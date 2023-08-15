@@ -18,8 +18,8 @@ type AVLDataPacket struct {
 func (adp AVLDataPacket) String() string {
 	return fmt.Sprintf(`
 Preamble: %x
-DataFieldLenght: %d 
-CodecID: %x 
+DataFieldLenght: %d
+CodecID: %x
 NumberOfData1: %d
 AVLData %s
 NumberOfData2: %d
@@ -82,20 +82,23 @@ func (gps GPSElement) String() string {
 }
 
 type IOElement struct {
-	EventIOID  uint8
-	NOfTotalID uint8
+	EventIOID  uint16
+	NOfTotalID uint16
 
-	N1OfOneByteIO uint8
+	N1OfOneByteIO uint16
 	OneByteIOs    []OneByteIO
 
-	N2OfOneByteIO uint8
+	N2OfOneByteIO uint16
 	TwoByteIOs    []TwoByteIO
 
-	N4OfOneByteIO uint8
+	N4OfOneByteIO uint16
 	FourByteIOs   []FourByteIO
 
-	N8OfOneByteIO uint8
+	N8OfOneByteIO uint16
 	EightByteIOs  []EightByteIO
+
+	NXOfOneByteIO uint16
+	XByteIOs      []XByteIO
 }
 
 func (ioelem IOElement) String() string {
@@ -109,7 +112,9 @@ func (ioelem IOElement) String() string {
 		N4OfOneByteIO: %d
 		FourByteIOs: %s
 		N8OfOneByteIO: %d
-		EightByteIOs: %s`,
+		EightByteIOs: %s,
+		NXOfOneByteIO: %d,
+		XByteIOs: %s`,
 
 		ioelem.EventIOID,
 		ioelem.NOfTotalID,
@@ -121,17 +126,19 @@ func (ioelem IOElement) String() string {
 		ioelem.FourByteIOs,
 		ioelem.N8OfOneByteIO,
 		ioelem.EightByteIOs,
+		ioelem.NXOfOneByteIO,
+		ioelem.XByteIOs,
 	)
 }
 
 type OneByteIO struct {
-	IOID    uint8
+	IOID    uint16
 	IOValue uint8
 }
 
 func (one OneByteIO) String() string {
 	return fmt.Sprintf(`
-			EventIOID: %d
+			IOID: %d
 			IOValue: %d`,
 		one.IOID,
 		one.IOValue,
@@ -139,13 +146,13 @@ func (one OneByteIO) String() string {
 }
 
 type TwoByteIO struct {
-	IOID    uint8
+	IOID    uint16
 	IOValue uint16
 }
 
 func (two TwoByteIO) String() string {
 	return fmt.Sprintf(`
-			EventIOID: %d
+			IOID: %d
 			IOValue: %d`,
 		two.IOID,
 		two.IOValue,
@@ -153,13 +160,13 @@ func (two TwoByteIO) String() string {
 }
 
 type FourByteIO struct {
-	IOID    uint8
+	IOID    uint16
 	IOValue uint32
 }
 
 func (four FourByteIO) String() string {
 	return fmt.Sprintf(`
-			EventIOID: %d
+			IOID: %d
 			IOValue: %d`,
 		four.IOID,
 		four.IOValue,
@@ -167,16 +174,33 @@ func (four FourByteIO) String() string {
 }
 
 type EightByteIO struct {
-	IOID    uint8
+	IOID    uint16
 	IOValue uint64
 }
 
 func (eight EightByteIO) String() string {
 	return fmt.Sprintf(`
-			EventIOID: %d
+			IOID: %d
 			IOValue: %d`,
 		eight.IOID,
 		eight.IOValue,
+	)
+}
+
+type XByteIO struct {
+	IOID     uint16
+	IOLength uint16
+	IOValue  []byte
+}
+
+func (x XByteIO) String() string {
+	return fmt.Sprintf(`
+			IOID: %d
+			IOLength: %d
+			IOValue: %d`,
+		x.IOID,
+		x.IOLength,
+		x.IOValue,
 	)
 }
 
@@ -247,25 +271,25 @@ func NewAVLDataPacket(buf []byte) *AVLDataPacket {
 		// io element
 		avld.IOElement = *new(IOElement)
 
-		avld.IOElement.EventIOID = uint8(buf[index])
+		avld.IOElement.EventIOID = b.Uint16(buf[index : index+2])
 		// fmt.Printf("EventIOID buf[%d] %v\n", index, buf[index])
-		index += 1
+		index += 2
 
-		avld.IOElement.NOfTotalID = uint8(buf[index])
+		avld.IOElement.NOfTotalID = b.Uint16(buf[index : index+2])
 		// fmt.Printf("NOfTotalID buf[%d] %v\n", index, buf[index])
-		index += 1
+		index += 2
 
 		// N1 elems
-		avld.IOElement.N1OfOneByteIO = uint8(buf[index])
+		avld.IOElement.N1OfOneByteIO = b.Uint16(buf[index : index+2])
 		// fmt.Printf("N1OfOneByteIO buf[%d] %v\n", index, buf[index])
-		index += 1
+		index += 2
 
 		// fmt.Printf("avld.IOElement.N1OfOneByteIO is %d\n", int(avld.IOElement.N1OfOneByteIO))
 		for i := 0; i < int(avld.IOElement.N1OfOneByteIO); i++ {
 			var oneByteIo OneByteIO
 
-			oneByteIo.IOID = uint8(buf[index])
-			index += 1
+			oneByteIo.IOID = b.Uint16(buf[index : index+2])
+			index += 2
 
 			oneByteIo.IOValue = uint8(buf[index])
 			index += 1
@@ -274,15 +298,15 @@ func NewAVLDataPacket(buf []byte) *AVLDataPacket {
 		}
 
 		// N2 elems
-		avld.IOElement.N2OfOneByteIO = uint8(buf[index])
-		index += 1
+		avld.IOElement.N2OfOneByteIO = b.Uint16(buf[index : index+2])
+		index += 2
 
 		// fmt.Printf("avld.IOElement.N2OfOneByteIO is %d\n", int(avld.IOElement.N2OfOneByteIO))
 		for i := 0; i < int(avld.IOElement.N2OfOneByteIO); i++ {
 			var twoByteIo TwoByteIO
 
-			twoByteIo.IOID = uint8(buf[index])
-			index += 1
+			twoByteIo.IOID = b.Uint16(buf[index : index+2])
+			index += 2
 
 			twoByteIo.IOValue = b.Uint16(buf[index : index+2])
 			index += 2
@@ -291,15 +315,15 @@ func NewAVLDataPacket(buf []byte) *AVLDataPacket {
 		}
 
 		// N4 elems
-		avld.IOElement.N4OfOneByteIO = uint8(buf[index])
-		index += 1
+		avld.IOElement.N4OfOneByteIO = b.Uint16(buf[index : index+2])
+		index += 2
 
 		// fmt.Printf("avld.IOElement.N4OfOneByteIO is %d\n", int(avld.IOElement.N4OfOneByteIO))
 		for i := 0; i < int(avld.IOElement.N4OfOneByteIO); i++ {
 			var fourByteIo FourByteIO
 
-			fourByteIo.IOID = uint8(buf[index])
-			index += 1
+			fourByteIo.IOID = b.Uint16(buf[index : index+2])
+			index += 2
 
 			fourByteIo.IOValue = b.Uint32(buf[index : index+4])
 			index += 4
@@ -308,20 +332,52 @@ func NewAVLDataPacket(buf []byte) *AVLDataPacket {
 		}
 
 		// N8 elems
-		avld.IOElement.N8OfOneByteIO = uint8(buf[index])
-		index += 1
+		avld.IOElement.N8OfOneByteIO = b.Uint16(buf[index : index+2])
+		index += 2
 
 		// fmt.Printf("avld.IOElement.N8OfOneByteIO is %d\n", int(avld.IOElement.N8OfOneByteIO))
 		for i := 0; i < int(avld.IOElement.N8OfOneByteIO); i++ {
 			var eightByteIo EightByteIO
 
-			eightByteIo.IOID = uint8(buf[index])
-			index += 1
+			eightByteIo.IOID = b.Uint16(buf[index : index+2])
+			index += 2
 
 			eightByteIo.IOValue = b.Uint64(buf[index : index+8])
 			index += 8
 
 			avld.IOElement.EightByteIOs = append(avld.IOElement.EightByteIOs, eightByteIo)
+		}
+
+		// NX elems
+		avld.IOElement.NXOfOneByteIO = b.Uint16(buf[index : index+2])
+		index += 2
+
+		// fmt.Printf("avld.IOElement.NXOfOneByteIO is %d\n", int(avld.IOElement.NXOfOneByteIO))
+		for i := 0; i < int(avld.IOElement.NXOfOneByteIO); i++ {
+			var xByteIo XByteIO
+
+			xByteIo.IOID = b.Uint16(buf[index : index+2])
+			index += 2
+
+			xByteIo.IOLength = b.Uint16(buf[index : index+2])
+			index += 2
+
+			fmt.Printf("xByteIo.IOLength is %d\n", xByteIo.IOLength)
+
+			fmt.Printf("index before %d\n", index)
+			fmt.Printf("index before %d\n", int(xByteIo.IOLength))
+			step := int(xByteIo.IOLength)
+
+			xByteIo.IOValue = buf[index : index+step]
+
+			fmt.Printf("multibyte value is %+v\n", xByteIo.IOValue)
+			fmt.Printf("multibyte value is %s\n", string(xByteIo.IOValue))
+
+			index += step
+
+			fmt.Printf("index after %d\n", index)
+
+			avld.IOElement.XByteIOs = append(avld.IOElement.XByteIOs, xByteIo)
 		}
 
 		adp.AVLData = append(adp.AVLData, avld)
@@ -341,7 +397,7 @@ func NewAVLDataPacket(buf []byte) *AVLDataPacket {
 }
 
 func dumpUniqueIOIDs(adp AVLDataPacket) {
-	uniqueIOIDS := make(map[uint8]bool)
+	uniqueIOIDS := make(map[uint16]bool)
 	for _, v := range adp.AVLData {
 		ioelem := v.IOElement
 
@@ -359,6 +415,10 @@ func dumpUniqueIOIDs(adp AVLDataPacket) {
 
 		for _, n8elem := range ioelem.EightByteIOs {
 			uniqueIOIDS[n8elem.IOID] = true
+		}
+
+		for _, nxelem := range ioelem.XByteIOs {
+			uniqueIOIDS[nxelem.IOID] = true
 		}
 	}
 

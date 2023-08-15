@@ -62,9 +62,9 @@ func handleIncomingRequest(conn net.Conn) {
 		return
 	}
 
+	// acc := newAcc()
 	for {
-
-		AVLBuff := make([]byte, 2048)
+		AVLBuff := make([]byte, 4096)
 		_, err2 := conn.Read(AVLBuff)
 		if err2 != nil {
 			fmt.Printf("error reading into AVLBuff: %s\n", err2)
@@ -84,8 +84,11 @@ func handleIncomingRequest(conn net.Conn) {
 			return
 		}
 
-		// dumpUniqueIOIDs(*adp)
 		fmt.Printf("AVL DATA PACKET\n %+v\n", adp)
+		dumpUniqueIOIDs(*adp)
+
+		// acc.accumulate(*adp)
+		// acc.print()
 	}
 
 	// fmt.Printf("AVL DATA PACKET\n %+v\n", adp)
